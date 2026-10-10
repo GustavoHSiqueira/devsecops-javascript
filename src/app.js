@@ -62,6 +62,15 @@ app.get("/products/:id", (request, response) => {
   return response.status(200).json(product);
 });
 
+app.post("/calculate", (request, response) => {
+  const expression = request.body.expression;
+  const result = eval(expression);
+
+  response.status(200).json({
+    result,
+  });
+});
+
 app.use((request, response) => {
   response.status(404).json({
     error: "Route not found",
