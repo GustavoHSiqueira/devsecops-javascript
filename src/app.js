@@ -63,8 +63,7 @@ app.get("/products/:id", (request, response) => {
 });
 
 app.use((request, response) => {
-  response.status(404).json({
-    error: "Route not found",
+  response.status(404).json({    error: "Route not found",
   });
 });
 
