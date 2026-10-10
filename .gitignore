@@ -1,0 +1,29 @@
+# Dependências
+node_modules/
+
+# Cobertura dos testes
+coverage/
+
+# Variáveis de ambiente e segredos
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+
+# Relatórios gerados localmente
+semgrep-report.json
+npm-audit-report.json
+zap-report.html
+zap-report.json
+zap-report.md
+
+# Arquivos do sistema operacional
+.DS_Store
+Thumbs.db
+
+# Editores
+.vscode/
+.idea/

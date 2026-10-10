@@ -1,0 +1,13 @@
+node_modules
+coverage
+.git
+.github
+evidence
+tests
+README.md
+npm-debug.log
+semgrep-report.json
+npm-audit-report.json
+zap-report.html
+zap-report.json
+zap-report.md

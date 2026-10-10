@@ -1,0 +1,179 @@
+name: Security Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Obter código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Executar testes
+        run: npm test
+
+  sast:
+    name: SAST - Semgrep
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Obter código
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Instalar Semgrep
+        run: pip install semgrep
+
+      - name: Executar análise SAST
+        run: |
+          semgrep scan \
+            --config .semgrep.yml \
+            --config p/javascript \
+            --error \
+            --json-output=semgrep-report.json \
+            src
+
+      - name: Salvar relatório do Semgrep
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: semgrep-report
+          path: semgrep-report.json
+          if-no-files-found: warn
+
+  sca:
+    name: SCA - npm audit
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Obter código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Gerar relatório JSON
+        run: npm audit --json > npm-audit-report.json
+        continue-on-error: true
+
+      - name: Aplicar controle de segurança
+        run: npm audit --audit-level=high
+
+      - name: Salvar relatório do npm audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-audit-report
+          path: npm-audit-report.json
+          if-no-files-found: warn
+
+  dast:
+    name: DAST - OWASP ZAP
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Obter código
+        uses: actions/checkout@v4
+
+      - name: Construir imagem da aplicação
+        run: docker build -t rural-store-api .
+
+      - name: Criar rede Docker
+        run: docker network create devsecops-network
+
+      - name: Iniciar aplicação
+        run: |
+          docker run \
+            --detach \
+            --name rural-store-api \
+            --network devsecops-network \
+            rural-store-api
+
+      - name: Aguardar aplicação
+        run: |
+          for attempt in {1..30}; do
+            if docker run --rm \
+              --network devsecops-network \
+              curlimages/curl:8.12.1 \
+              --fail \
+              --silent \
+              http://rural-store-api:3000/health; then
+              echo "Aplicação iniciada com sucesso."
+              exit 0
+            fi
+
+            echo "Aguardando aplicação: tentativa ${attempt}/30"
+            sleep 2
+          done
+
+          echo "A aplicação não iniciou corretamente."
+          docker logs rural-store-api
+          exit 1
+
+      - name: Executar OWASP ZAP Baseline
+        run: |
+          docker run --rm \
+            --user 0:0 \
+            --network devsecops-network \
+            --volume "${{ github.workspace }}:/zap/wrk/:rw" \
+            ghcr.io/zaproxy/zaproxy:stable \
+            zap-baseline.py \
+            -t http://rural-store-api:3000 \
+            -c /zap/wrk/.zap-rules.tsv \
+            -r zap-report.html \
+            -J zap-report.json \
+            -w zap-report.md \
+            -I
+
+      - name: Mostrar logs da aplicação
+        if: always()
+        run: docker logs rural-store-api
+
+      - name: Salvar relatórios do ZAP
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-report
+          path: |
+            zap-report.html
+            zap-report.json
+            zap-report.md
+          if-no-files-found: warn
+
+      - name: Encerrar ambiente
+        if: always()
+        run: |
+          docker rm --force rural-store-api 2>/dev/null || true
+          docker network rm devsecops-network 2>/dev/null || true

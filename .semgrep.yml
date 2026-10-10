@@ -1,0 +1,36 @@
+rules:
+  - id: javascript-dangerous-eval
+    message: >
+      Uso inseguro de eval(). Uma entrada controlada pelo usuário pode
+      permitir execução arbitrária de código.
+    severity: ERROR
+    languages:
+      - javascript
+    pattern: eval(...)
+
+  - id: javascript-child-process-exec
+    message: >
+      Revise o uso de child_process.exec(). Argumentos não validados podem
+      causar command injection.
+    severity: ERROR
+    languages:
+      - javascript
+    patterns:
+      - pattern-either:
+          - pattern: child_process.exec(...)
+          - pattern: $CHILD.exec(...)
+
+  - id: javascript-hardcoded-secret
+    message: >
+      Possível segredo armazenado diretamente no código-fonte.
+    severity: WARNING
+    languages:
+      - javascript
+    patterns:
+      - pattern-either:
+          - pattern: const $VARIABLE = "..."
+          - pattern: let $VARIABLE = "..."
+          - pattern: var $VARIABLE = "..."
+      - metavariable-regex:
+          metavariable: $VARIABLE
+          regex: (?i).*(password|secret|token|apiKey|api_key).*
